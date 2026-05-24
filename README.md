@@ -2,6 +2,8 @@
 
 Java 21 · Spring Boot 3.2 · PostgreSQL · MongoDB · Redis (Redisson)
 
+**Live deployment:** https://wallet-service-production-7710.up.railway.app
+
 ---
 
 ## Quick Start

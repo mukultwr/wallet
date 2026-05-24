@@ -172,7 +172,7 @@ class WalletServiceTest {
         Transaction txn = savedTransaction(TransactionType.DEDUCT, 10_000L, 0L, "key-1");
 
         when(valueOps.get(startsWith("idempotency:"))).thenReturn(null);
-        when(redissonClient.getLock(anyString())).thenReturn(rLock);
+        doReturn(rLock).when(redissonClient).getLock(anyString());
         when(rLock.tryLock(anyLong(), anyLong(), any())).thenReturn(true);
         when(rLock.isHeldByCurrentThread()).thenReturn(true);
 
@@ -200,7 +200,7 @@ class WalletServiceTest {
         WalletBalance balance = walletBalance(9_999L); // one paise short
 
         when(valueOps.get(anyString())).thenReturn(null);
-        when(redissonClient.getLock(anyString())).thenReturn(rLock);
+        doReturn(rLock).when(redissonClient).getLock(anyString());
         when(rLock.tryLock(anyLong(), anyLong(), any())).thenReturn(true);
         when(rLock.isHeldByCurrentThread()).thenReturn(true);
 

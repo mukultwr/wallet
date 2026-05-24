@@ -32,16 +32,29 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
-  # MongoDB — Railway injects MONGODB_URI (or use Atlas free tier)
   data:
+    # MongoDB — Railway injects MONGODB_URI
     mongodb:
       uri: ${MONGODB_URI:mongodb://localhost:27017/keychain_wallets}
+    # Redis — Railway injects REDISHOST / REDISPORT / REDISPASSWORD
+    redis:
+      host: ${REDISHOST:localhost}
+      port: ${REDISPORT:6379}
+      password: ${REDISPASSWORD:}
 
-  # Redis — Railway injects REDISHOST / REDISPORT / REDISPASSWORD
-  redis:
-    host: ${REDISHOST:localhost}
-    port: ${REDISPORT:6379}
-    password: ${REDISPASSWORD:}
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  health:
+    # Redisson provides its own connection pool and doesn't expose a standard
+    # RedisConnection.ping() path that Spring Actuator expects — disable to avoid false DOWN
+    redis:
+      enabled: false
 
 logging:
   level:

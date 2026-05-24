@@ -4,7 +4,7 @@ WORKDIR /app
 COPY pom.xml .
 RUN mvn dependency:go-offline -q
 COPY src ./src
-RUN mvn package -DskipTests -q
+RUN mvn package -Dmaven.test.skip=true -q
 
 # Stage 2: Runtime — minimal JRE image (~200 MB vs ~600 MB full JDK)
 FROM eclipse-temurin:21-jre-jammy
