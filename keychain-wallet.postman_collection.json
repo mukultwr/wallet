@@ -1,28 +1,130 @@
 {
   "info": {
     "name": "Keychain Wallet Service",
-    "_postman_id": "keychain-wallet-service-v1",
-    "description": "Prepaid Wallet Service — Keychain OS\n\nBase URL is stored as a collection variable. After running **Create Wallet**, the wallet ID is automatically saved to `walletId` so every subsequent request uses it without manual copy-paste.",
+    "_postman_id": "keychain-wallet-service-v2",
+    "description": "Prepaid Wallet Service — Keychain OS\n\n**Setup:** Run the three requests in the **Auth** folder first. Tokens are auto-saved to collection variables. Then run **Create Wallet** — the walletId is also auto-saved.\n\nAll subsequent requests use `{{adminToken}}`, `{{serviceToken}}`, or `{{customerToken}}` automatically.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {
-      "key": "baseUrl",
-      "value": "https://wallet-service-production-7710.up.railway.app",
-      "type": "string"
-    },
-    {
-      "key": "walletId",
-      "value": "",
-      "type": "string"
-    }
+    { "key": "baseUrl", "value": "https://wallet-service-production-7710.up.railway.app", "type": "string" },
+    { "key": "walletId", "value": "", "type": "string" },
+    { "key": "adminToken", "value": "", "type": "string" },
+    { "key": "serviceToken", "value": "", "type": "string" },
+    { "key": "customerToken", "value": "", "type": "string" }
   ],
   "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Get ADMIN Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.token) {",
+                  "    pm.collectionVariables.set('adminToken', json.token);",
+                  "    console.log('adminToken saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"ADMIN-1\",\n  \"role\": \"ADMIN\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "token"]
+            },
+            "description": "Issues an ADMIN token. Auto-saved to `adminToken` variable. ADMIN can create wallets, topup, deduct, and read any wallet."
+          },
+          "response": []
+        },
+        {
+          "name": "Get SERVICE Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.token) {",
+                  "    pm.collectionVariables.set('serviceToken', json.token);",
+                  "    console.log('serviceToken saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"ORDER-SERVICE\",\n  \"role\": \"SERVICE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "token"]
+            },
+            "description": "Issues a SERVICE token for the Order Service. Auto-saved to `serviceToken`. SERVICE can topup and deduct on any wallet."
+          },
+          "response": []
+        },
+        {
+          "name": "Get CUSTOMER Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.token) {",
+                  "    pm.collectionVariables.set('customerToken', json.token);",
+                  "    console.log('customerToken saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"CUST-001\",\n  \"role\": \"CUSTOMER\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/token",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "token"]
+            },
+            "description": "Issues a CUSTOMER token for CUST-001. Auto-saved to `customerToken`. CUSTOMER can only read their own wallet."
+          },
+          "response": []
+        }
+      ]
+    },
     {
       "name": "Wallet",
       "item": [
         {
-          "name": "Create Wallet",
+          "name": "Create Wallet (ADMIN)",
           "event": [
             {
               "listen": "test",
@@ -41,7 +143,8 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
             ],
             "body": {
               "mode": "raw",
@@ -53,35 +156,39 @@
               "host": ["{{baseUrl}}"],
               "path": ["wallets"]
             },
-            "description": "Creates a new wallet. The `walletId` from the response is automatically saved to the collection variable and used by all subsequent requests."
+            "description": "Creates a new wallet. Requires ADMIN token. The `walletId` is auto-saved to the collection variable."
           },
           "response": []
         },
         {
-          "name": "Get Balance",
+          "name": "Get Balance (CUSTOMER — own wallet)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
             "url": {
               "raw": "{{baseUrl}}/wallets/{{walletId}}/balance",
               "host": ["{{baseUrl}}"],
               "path": ["wallets", "{{walletId}}", "balance"]
             },
-            "description": "Returns the current balance in both INR and paise."
+            "description": "Returns balance. CUSTOMER token only works if the wallet's customerId matches the token's customerId (CUST-001)."
           },
           "response": []
         },
         {
-          "name": "Get Transaction History",
+          "name": "Get Transaction History (CUSTOMER — own wallet)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
             "url": {
               "raw": "{{baseUrl}}/wallets/{{walletId}}/transactions",
               "host": ["{{baseUrl}}"],
               "path": ["wallets", "{{walletId}}", "transactions"]
             },
-            "description": "Returns the full immutable ledger for this wallet, newest first."
+            "description": "Returns full immutable ledger. CUSTOMER can only see their own wallet."
           },
           "response": []
         }
@@ -91,11 +198,12 @@
       "name": "Top Up",
       "item": [
         {
-          "name": "Top Up ₹500",
+          "name": "Top Up ₹500 (SERVICE)",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{serviceToken}}" }
             ],
             "body": {
               "mode": "raw",
@@ -107,16 +215,17 @@
               "host": ["{{baseUrl}}"],
               "path": ["wallets", "{{walletId}}", "topup"]
             },
-            "description": "Add ₹500 to the wallet."
+            "description": "Add ₹500 to the wallet. Requires SERVICE or ADMIN token."
           },
           "response": []
         },
         {
-          "name": "Top Up ₹100 (exact threshold)",
+          "name": "Top Up ₹100 (SERVICE)",
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{serviceToken}}" }
             ],
             "body": {
               "mode": "raw",
@@ -138,11 +247,12 @@
       "name": "Deduct",
       "item": [
         {
-          "name": "Deduct ₹100 — ORDER-001",
+          "name": "Deduct ₹100 — ORDER-001 (SERVICE)",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{serviceToken}}" },
               { "key": "Idempotency-Key", "value": "ORDER-001", "description": "Required — unique per order" }
             ],
             "body": {
@@ -155,7 +265,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["wallets", "{{walletId}}", "deduct"]
             },
-            "description": "Deducts ₹100 for order ORDER-001."
+            "description": "Deducts ₹100 for ORDER-001. Requires SERVICE token."
           },
           "response": []
         },
@@ -165,7 +275,8 @@
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
-              { "key": "Idempotency-Key", "value": "ORDER-001", "description": "Same key as above — should return the same transactionId, wallet NOT double-charged" }
+              { "key": "Authorization", "value": "Bearer {{serviceToken}}" },
+              { "key": "Idempotency-Key", "value": "ORDER-001", "description": "Same key — must return same transactionId, wallet NOT double-charged" }
             ],
             "body": {
               "mode": "raw",
@@ -177,16 +288,17 @@
               "host": ["{{baseUrl}}"],
               "path": ["wallets", "{{walletId}}", "deduct"]
             },
-            "description": "Sends the exact same Idempotency-Key as the previous request. The response must have the same transactionId — proving the wallet was only charged once."
+            "description": "Retry with same Idempotency-Key. Must return identical transactionId — proves no double charge."
           },
           "response": []
         },
         {
-          "name": "Deduct ₹100 — ORDER-002",
+          "name": "Deduct ₹100 — ORDER-002 (SERVICE)",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{serviceToken}}" },
               { "key": "Idempotency-Key", "value": "ORDER-002" }
             ],
             "body": {
@@ -199,7 +311,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["wallets", "{{walletId}}", "deduct"]
             },
-            "description": "A second, separate order with a different idempotency key."
+            "description": "A separate order with a different idempotency key."
           },
           "response": []
         }
@@ -209,11 +321,50 @@
       "name": "Error Cases",
       "item": [
         {
+          "name": "Get Balance — Wrong Customer (403)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/wallets/some-other-wallet-id/balance",
+              "host": ["{{baseUrl}}"],
+              "path": ["wallets", "some-other-wallet-id", "balance"]
+            },
+            "description": "CUSTOMER token for CUST-001 trying to read a wallet that belongs to a different customer. Expects HTTP 403."
+          },
+          "response": []
+        },
+        {
+          "name": "Deduct — No Token (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "ORDER-NOAUTH" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"referenceId\": \"ORDER-NOAUTH\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/wallets/{{walletId}}/deduct",
+              "host": ["{{baseUrl}}"],
+              "path": ["wallets", "{{walletId}}", "deduct"]
+            },
+            "description": "No Authorization header. Expects HTTP 401."
+          },
+          "response": []
+        },
+        {
           "name": "Deduct — Insufficient Balance (422)",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{serviceToken}}" },
               { "key": "Idempotency-Key", "value": "ORDER-BROKE-001" }
             ],
             "body": {
@@ -226,7 +377,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["wallets", "{{walletId}}", "deduct"]
             },
-            "description": "Run this on a wallet with balance < ₹100. Expects HTTP 422 with a clear error message."
+            "description": "Run on a wallet with balance < ₹100. Expects HTTP 422."
           },
           "response": []
         },
@@ -235,7 +386,8 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{serviceToken}}" }
             ],
             "body": {
               "mode": "raw",
@@ -255,34 +407,15 @@
           "name": "Get Balance — Wallet Not Found (404)",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
             "url": {
               "raw": "{{baseUrl}}/wallets/nonexistent-wallet-id/balance",
               "host": ["{{baseUrl}}"],
               "path": ["wallets", "nonexistent-wallet-id", "balance"]
             },
-            "description": "Expects HTTP 404 with a clear error message."
-          },
-          "response": []
-        },
-        {
-          "name": "Create Wallet — Validation Error (400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"customerId\": \"CUST-002\",\n  \"name\": \"\",\n  \"email\": \"not-an-email\",\n  \"phone\": \"+91\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/wallets",
-              "host": ["{{baseUrl}}"],
-              "path": ["wallets"]
-            },
-            "description": "Invalid email and blank name. Expects HTTP 400 with field-level validation errors."
+            "description": "Expects HTTP 404."
           },
           "response": []
         }
@@ -301,7 +434,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["actuator", "health"]
             },
-            "description": "Returns status of all components: PostgreSQL, MongoDB, disk."
+            "description": "Open — no auth required. Returns status of PostgreSQL, MongoDB, disk."
           },
           "response": []
         }

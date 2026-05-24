@@ -15,26 +15,43 @@ docker-compose up -d
 # 2. Run the service
 ./mvnw spring-boot:run
 
-# 3. Create a wallet
+# 3. Get tokens (run once — three roles)
+ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"ADMIN-1","role":"ADMIN"}' | jq -r '.token')
+
+SERVICE_TOKEN=$(curl -s -X POST http://localhost:8080/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"ORDER-SERVICE","role":"SERVICE"}' | jq -r '.token')
+
+CUSTOMER_TOKEN=$(curl -s -X POST http://localhost:8080/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"CUST-1","role":"CUSTOMER"}' | jq -r '.token')
+
+# 4. Create a wallet (ADMIN only)
 curl -s -X POST http://localhost:8080/wallets \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{"customerId":"CUST-1","name":"Rahul Sharma","email":"rahul@example.com","phone":"+919999999999"}'
 
-# 4. Top up ₹500
+# 5. Top up ₹500 (SERVICE or ADMIN)
 curl -s -X POST http://localhost:8080/wallets/<id>/topup \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SERVICE_TOKEN" \
   -d '{"amount":500}'
 
-# 5. Deduct ₹100 (order placement)
+# 6. Deduct ₹100 (SERVICE or ADMIN — Order Service uses SERVICE token)
 curl -s -X POST http://localhost:8080/wallets/<id>/deduct \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $SERVICE_TOKEN" \
   -H "Idempotency-Key: ORDER-001" \
   -d '{"referenceId":"ORDER-001"}'
 
-# 6. Check balance
-curl -s http://localhost:8080/wallets/<id>/balance
+# 7. Check balance (CUSTOMER can only read their own wallet)
+curl -s http://localhost:8080/wallets/<id>/balance \
+  -H "Authorization: Bearer $CUSTOMER_TOKEN"
 
-# 7. Run the Order Service stub
+# 8. Run the Order Service stub
 pip install requests
 python order-stub/order_stub.py <wallet-id> --orders 3
 python order-stub/order_stub.py <wallet-id> --orders 5 --concurrent
@@ -43,15 +60,41 @@ python order-stub/order_stub.py <wallet-id> --idempotency-test
 
 ---
 
+## Authentication
+
+All endpoints (except `/auth/token` and `/actuator/health`) require a JWT bearer token.
+
+```
+Authorization: Bearer <token>
+```
+
+**Get a token:**
+```bash
+curl -X POST /auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"CUST-1","role":"CUSTOMER"}'   # role: CUSTOMER | SERVICE | ADMIN
+```
+
+| Role | Who uses it | What they can do |
+|------|-------------|-----------------|
+| `ADMIN` | Ops / internal tools | Everything — create wallets, topup, deduct, read any wallet |
+| `SERVICE` | Order Service (server-to-server) | Topup + deduct on any wallet |
+| `CUSTOMER` | End user | Read **own wallet only** (balance + transactions) |
+
+A `CUSTOMER` token with `customerId=CUST-1` can only read wallets where `customerId=CUST-1`. Attempting to read another customer's wallet returns **403**.
+
+---
+
 ## API Reference
 
-| Method | Path | Header | Purpose |
-|--------|------|--------|---------|
-| POST | `/wallets` | — | Create wallet |
-| POST | `/wallets/:id/topup` | — | Add funds (body: `{"amount": 500}` in INR) |
-| POST | `/wallets/:id/deduct` | `Idempotency-Key: <order_id>` | Deduct ₹100 |
-| GET | `/wallets/:id/balance` | — | Current balance |
-| GET | `/wallets/:id/transactions` | — | Full ledger (newest first) |
+| Method | Path | Required Role | Extra Header | Purpose |
+|--------|------|--------------|--------------|---------|
+| POST | `/auth/token` | — | — | Get JWT token |
+| POST | `/wallets` | `ADMIN` | — | Create wallet |
+| POST | `/wallets/:id/topup` | `SERVICE` or `ADMIN` | — | Add funds |
+| POST | `/wallets/:id/deduct` | `SERVICE` or `ADMIN` | `Idempotency-Key: <order_id>` | Deduct ₹100 |
+| GET | `/wallets/:id/balance` | Any (CUSTOMER = own only) | — | Current balance |
+| GET | `/wallets/:id/transactions` | Any (CUSTOMER = own only) | — | Full ledger |
 
 ---
 
