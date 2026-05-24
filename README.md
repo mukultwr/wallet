@@ -176,22 +176,3 @@ business logic in isolation:
 The race-condition test is the most important: it directly validates that the
 distributed lock + `SELECT FOR UPDATE` combination prevents over-spend under
 concurrent load.
-
----
-
-## What I Would Do With More Time
-
-| Priority | Item |
-|----------|------|
-| High | Pagination on `GET /transactions` (cursor-based, not offset) |
-| High | Outbox relay publisher wired to Kafka |
-| High | Wallet suspension / admin API |
-| Medium | Configurable deduction amount (not always ₹100) |
-| Medium | Prometheus metrics: deduction latency, lock wait time, cache hit rate |
-| Medium | Rate limiting per wallet per minute (Redis token bucket) |
-| Medium | Partial top-up validation (e.g., minimum ₹10) |
-| Low | MongoDB → Postgres replica for read-heavy balance queries |
-| Low | Soft-delete and GDPR data erasure for wallet profiles |
-| Low | OpenAPI / Swagger docs auto-generated from the controller |
-| Scale | Partition `transactions` table by `wallet_id` range when rows > 100 M |
-| Scale | Read replica for `GET /balance` and `GET /transactions` |
