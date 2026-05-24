@@ -1,0 +1,12 @@
+# Testcontainers overrides spring.datasource.url / spring.data.mongodb.uri / spring.redis.*
+# via @DynamicPropertySource — only non-connection settings go here.
+
+spring:
+  flyway:
+    enabled: true
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    com.keychain: DEBUG

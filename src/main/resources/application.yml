@@ -1,0 +1,49 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: wallet-service
+
+  # PostgreSQL — Railway injects PGHOST / PGPORT / PGDATABASE / PGUSER / PGPASSWORD
+  datasource:
+    url: jdbc:postgresql://${PGHOST:localhost}:${PGPORT:5432}/${PGDATABASE:wallet_db}
+    username: ${PGUSER:wallet_user}
+    password: ${PGPASSWORD:wallet_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jakarta.persistence.lock.timeout: 5000
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # MongoDB — Railway injects MONGODB_URI (or use Atlas free tier)
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/keychain_wallets}
+
+  # Redis — Railway injects REDISHOST / REDISPORT / REDISPASSWORD
+  redis:
+    host: ${REDISHOST:localhost}
+    port: ${REDISPORT:6379}
+    password: ${REDISPASSWORD:}
+
+logging:
+  level:
+    com.keychain: INFO
+    org.springframework.transaction: WARN
