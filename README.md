@@ -73,18 +73,35 @@ data at scale (`0.1 + 0.2 ≠ 0.3` in IEEE-754). All internal calculations use
 The balance is always the PostgreSQL source of truth. MongoDB is never
 consulted for financial decisions.
 
-### 3. Concurrency — two-layer locking
+### 3. Concurrency — three-layer safety net
 
-**Layer 1 — Redisson distributed lock** (`lock:wallet:<id>`, 10 s max hold):
-Serialises deductions across all service instances before touching the DB.
+Every deduction passes through three independent guards, each defending against a different failure mode:
 
-**Layer 2 — PostgreSQL `SELECT FOR UPDATE`** inside the JPA transaction:
-Safety net that holds even if the app lock expires or a script bypasses the
-service entirely. If both layers are somehow bypassed, the `CHECK (balance >= 0)`
-constraint in PostgreSQL is the last line of defence.
+**Layer 1 — Redisson distributed lock** (`lock:wallet:<id>`, 10 s max hold)
 
-This three-layer approach means the system is correct whether you have one pod
-or one hundred.
+Before any DB access, the service acquires a Redis-backed distributed lock scoped to the wallet ID. This serialises all deductions for a given wallet across every service instance — a second request for the same wallet blocks at this gate until the first completes. Because the lock lives in Redis (not in-process), it works correctly whether you have 1 pod or 100.
+
+- Lock key: `lock:wallet:<walletId>`
+- Max hold time: 10 seconds (auto-released if the JVM crashes mid-transaction)
+- Implemented via Redisson `RLock` — uses Redis `SET NX PX` under the hood
+
+**Layer 2 — PostgreSQL `SELECT FOR UPDATE`** inside the JPA transaction
+
+Even after acquiring the distributed lock, the balance row is fetched with a pessimistic write lock. This is the safety net for two scenarios the app lock cannot prevent:
+1. The Redisson lock expires just before the DB write (slow GC pause, network delay)
+2. A script or admin tool bypasses the service and hits PostgreSQL directly
+
+`SELECT FOR UPDATE` ensures only one transaction can read-then-write a wallet's balance row at a time at the database level.
+
+**Layer 3 — PostgreSQL `CHECK (balance >= 0)` constraint**
+
+The hard floor. Even if both locks are somehow bypassed, the database itself will reject any update that would push the balance below zero. This is the last line of defence and cannot be circumvented by application bugs.
+
+```
+Request → [Redisson lock] → [SELECT FOR UPDATE] → [CHECK constraint] → commit
+```
+
+This three-layer approach means the system is correct whether you have one pod or one hundred, and remains correct even under partial infrastructure failure.
 
 ### 4. Idempotency — two-layer deduplication
 
