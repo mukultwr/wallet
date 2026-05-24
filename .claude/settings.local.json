@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(export RAILWAY_API_TOKEN=aae96199-347a-4272-bc11-8f46af2973f1)",
+      "Bash(railway domain *)"
+    ]
+  }
+}

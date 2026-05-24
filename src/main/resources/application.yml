@@ -42,6 +42,22 @@ spring:
       port: ${REDISPORT:6379}
       password: ${REDISPASSWORD:}
 
+# Distributed rate limits (per wallet / per IP) — backed by Redisson token bucket
+# Change these without a code deploy; they take effect on restart.
+rate-limit:
+  deduct:
+    requests: 20      # max 20 deductions per wallet per minute (Order Service retries + normal load)
+    per-seconds: 60
+  topup:
+    requests: 10      # max 10 top-ups per wallet per minute
+    per-seconds: 60
+  read:
+    requests: 60      # max 60 balance/transaction reads per wallet per minute
+    per-seconds: 60
+  create:
+    requests: 10      # max 10 wallet creations per IP per minute
+    per-seconds: 60
+
 management:
   endpoint:
     health:

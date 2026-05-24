@@ -115,7 +115,20 @@ transaction. When you need async event publishing (notify Order Service,
 trigger notifications, fraud checks), wire up a Debezium CDC connector or a
 polling publisher — zero changes to the wallet service code.
 
-### 7. Wallet status lifecycle
+### 7. Distributed rate limiting
+
+Every write endpoint is rate-limited per wallet using Redisson's token bucket (`RRateLimiter`), which is distributed — limits are enforced correctly across all service instances via Redis.
+
+| Endpoint | Limit | Reason |
+|---|---|---|
+| `POST /deduct` | 20 req / min / wallet | Prevents Order Service runaway bugs |
+| `POST /topup` | 10 req / min / wallet | Prevents abuse |
+| `GET /balance`, `GET /transactions` | 60 req / min / wallet | Protects read path |
+| `POST /wallets` | 10 req / min / IP | Prevents mass wallet creation |
+
+Returns **HTTP 429** when exceeded. Limits are configurable in `application.yml` with no code change.
+
+### 8. Wallet status lifecycle
 
 `ACTIVE → SUSPENDED → CLOSED`. Deductions and top-ups are rejected on non-ACTIVE
 wallets. This gives ops a handle to freeze wallets for fraud without deleting
