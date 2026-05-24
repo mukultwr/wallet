@@ -58,6 +58,10 @@ rate-limit:
     requests: 10      # max 10 wallet creations per IP per minute
     per-seconds: 60
 
+jwt:
+  secret: ${JWT_SECRET:keychain-super-secret-key-change-in-production-min-256-bits}
+  expiry-hours: 24
+
 management:
   endpoint:
     health:

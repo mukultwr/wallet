@@ -12,6 +12,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -38,8 +41,6 @@ public class WalletController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
-    // Idempotency-Key header is REQUIRED — the Order Service must supply a unique key
-    // (e.g. order_id) so that network retries never double-charge a wallet.
     @PostMapping("/{id}/deduct")
     public ResponseEntity<ApiResponse<TransactionResponse>> deduct(
             @PathVariable String id,
@@ -51,15 +52,35 @@ public class WalletController {
     }
 
     @GetMapping("/{id}/balance")
-    public ResponseEntity<ApiResponse<BalanceResponse>> getBalance(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<BalanceResponse>> getBalance(
+            @PathVariable String id,
+            Authentication auth) {
+        checkOwnership(id, auth);
         BalanceResponse response = walletService.getBalance(id);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     @GetMapping("/{id}/transactions")
     public ResponseEntity<ApiResponse<List<TransactionResponse>>> getTransactions(
-            @PathVariable String id) {
+            @PathVariable String id,
+            Authentication auth) {
+        checkOwnership(id, auth);
         List<TransactionResponse> response = walletService.getTransactions(id);
         return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    // CUSTOMER role: verify the wallet belongs to them via customerId in the JWT subject.
+    // SERVICE and ADMIN roles can access any wallet without ownership check.
+    private void checkOwnership(String walletId, Authentication auth) {
+        if (auth == null) return;
+        boolean isCustomer = auth.getAuthorities()
+                .contains(new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+        if (!isCustomer) return;
+
+        String customerId = (String) auth.getPrincipal();
+        WalletResponse wallet = walletService.getWalletById(walletId);
+        if (!customerId.equals(wallet.getCustomerId())) {
+            throw new AccessDeniedException("You can only access your own wallet");
+        }
     }
 }

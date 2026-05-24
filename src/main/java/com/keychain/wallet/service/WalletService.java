@@ -57,6 +57,14 @@ public class WalletService {
     // Create wallet
     // -------------------------------------------------------------------------
 
+    public WalletResponse getWalletById(String walletId) {
+        WalletDocument doc = walletDocumentRepository.findById(walletId)
+                .orElseThrow(() -> new WalletNotFoundException(walletId));
+        WalletBalance balance = walletBalanceRepository.findById(walletId)
+                .orElseThrow(() -> new WalletNotFoundException(walletId));
+        return WalletResponse.from(doc, balance.getBalance());
+    }
+
     public WalletResponse createWallet(CreateWalletRequest request) {
         String walletId = UUID.randomUUID().toString();
 
