@@ -6,11 +6,14 @@ import com.keychain.wallet.dto.request.TopUpRequest;
 import com.keychain.wallet.dto.response.ApiResponse;
 import com.keychain.wallet.dto.response.BalanceResponse;
 import com.keychain.wallet.dto.response.WalletResponse;
+import com.keychain.wallet.security.JwtUtil;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -39,6 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @Testcontainers
+@ActiveProfiles("test")
 class WalletControllerIntegrationTest {
 
     @Container
@@ -63,10 +67,20 @@ class WalletControllerIntegrationTest {
         registry.add("spring.data.mongodb.uri", mongo::getReplicaSetUrl);
         registry.add("spring.redis.host", redis::getHost);
         registry.add("spring.redis.port", () -> redis.getMappedPort(6379));
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
     }
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
+    @Autowired JwtUtil jwtUtil;
+
+    private String adminToken;
+
+    @BeforeEach
+    void setUp() {
+        adminToken = jwtUtil.generate("ADMIN-TEST", "ADMIN");
+    }
 
     // -------------------------------------------------------------------------
     // Full happy path
@@ -81,6 +95,7 @@ class WalletControllerIntegrationTest {
 
         // Deduct ₹100 (order 1)
         mockMvc.perform(post("/wallets/{id}/deduct", walletId)
+                       .header("Authorization", "Bearer " + adminToken)
                        .header("Idempotency-Key", "ORDER-001")
                        .contentType(MediaType.APPLICATION_JSON)
                        .content("{\"referenceId\":\"ORDER-001\"}"))
@@ -90,7 +105,8 @@ class WalletControllerIntegrationTest {
                .andExpect(jsonPath("$.data.balanceAfterInr").value(100.00));
 
         // Balance should be ₹100
-        String balanceJson = mockMvc.perform(get("/wallets/{id}/balance", walletId))
+        String balanceJson = mockMvc.perform(get("/wallets/{id}/balance", walletId)
+                        .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
@@ -110,6 +126,7 @@ class WalletControllerIntegrationTest {
         topUp(walletId, "100.00"); // exactly ₹100
 
         mockMvc.perform(post("/wallets/{id}/deduct", walletId)
+                       .header("Authorization", "Bearer " + adminToken)
                        .header("Idempotency-Key", UUID.randomUUID().toString())
                        .contentType(MediaType.APPLICATION_JSON)
                        .content("{}"))
@@ -123,6 +140,7 @@ class WalletControllerIntegrationTest {
         topUp(walletId, "99.00"); // ₹1 short
 
         mockMvc.perform(post("/wallets/{id}/deduct", walletId)
+                       .header("Authorization", "Bearer " + adminToken)
                        .header("Idempotency-Key", UUID.randomUUID().toString())
                        .contentType(MediaType.APPLICATION_JSON)
                        .content("{}"))
@@ -145,6 +163,7 @@ class WalletControllerIntegrationTest {
 
         // First call
         MvcResult first = mockMvc.perform(post("/wallets/{id}/deduct", walletId)
+                .header("Authorization", "Bearer " + adminToken)
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
@@ -153,6 +172,7 @@ class WalletControllerIntegrationTest {
 
         // Second call with SAME key — must return identical transactionId
         MvcResult second = mockMvc.perform(post("/wallets/{id}/deduct", walletId)
+                .header("Authorization", "Bearer " + adminToken)
                 .header("Idempotency-Key", idempotencyKey)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
@@ -164,7 +184,8 @@ class WalletControllerIntegrationTest {
         assertThat(txn1).isEqualTo(txn2);
 
         // Balance must reflect only ONE deduction
-        String balanceJson = mockMvc.perform(get("/wallets/{id}/balance", walletId))
+        String balanceJson = mockMvc.perform(get("/wallets/{id}/balance", walletId)
+                        .header("Authorization", "Bearer " + adminToken))
                 .andReturn().getResponse().getContentAsString();
         ApiResponse<BalanceResponse> br = objectMapper.readValue(balanceJson,
                 objectMapper.getTypeFactory().constructParametricType(ApiResponse.class, BalanceResponse.class));
@@ -193,6 +214,7 @@ class WalletControllerIntegrationTest {
                 try {
                     startGate.await();
                     int status = mockMvc.perform(post("/wallets/{id}/deduct", walletId)
+                                    .header("Authorization", "Bearer " + adminToken)
                                     .header("Idempotency-Key", key)
                                     .contentType(MediaType.APPLICATION_JSON)
                                     .content("{}"))
@@ -210,7 +232,8 @@ class WalletControllerIntegrationTest {
         executor.shutdown();
 
         // Balance must be exactly ₹0 — two succeeded, three failed
-        String balanceJson = mockMvc.perform(get("/wallets/{id}/balance", walletId))
+        String balanceJson = mockMvc.perform(get("/wallets/{id}/balance", walletId)
+                        .header("Authorization", "Bearer " + adminToken))
                 .andReturn().getResponse().getContentAsString();
         ApiResponse<BalanceResponse> br = objectMapper.readValue(balanceJson,
                 objectMapper.getTypeFactory().constructParametricType(ApiResponse.class, BalanceResponse.class));
@@ -228,6 +251,7 @@ class WalletControllerIntegrationTest {
     void deduct_returns400_whenIdempotencyKeyMissing() throws Exception {
         String walletId = createWallet();
         mockMvc.perform(post("/wallets/{id}/deduct", walletId)
+                       .header("Authorization", "Bearer " + adminToken)
                        .contentType(MediaType.APPLICATION_JSON)
                        .content("{}"))
                .andExpect(status().isBadRequest());
@@ -239,7 +263,8 @@ class WalletControllerIntegrationTest {
 
     @Test
     void getBalance_returns404_forUnknownWallet() throws Exception {
-        mockMvc.perform(get("/wallets/nonexistent-id/balance"))
+        mockMvc.perform(get("/wallets/nonexistent-id/balance")
+                       .header("Authorization", "Bearer " + adminToken))
                .andExpect(status().isNotFound());
     }
 
@@ -255,6 +280,7 @@ class WalletControllerIntegrationTest {
         req.setPhone("+919999999999");
 
         MvcResult result = mockMvc.perform(post("/wallets")
+                        .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isCreated())
@@ -271,6 +297,7 @@ class WalletControllerIntegrationTest {
         req.setAmount(new BigDecimal(amountInr));
 
         mockMvc.perform(post("/wallets/{id}/topup", walletId)
+                       .header("Authorization", "Bearer " + adminToken)
                        .contentType(MediaType.APPLICATION_JSON)
                        .content(objectMapper.writeValueAsString(req)))
                .andExpect(status().isOk());
