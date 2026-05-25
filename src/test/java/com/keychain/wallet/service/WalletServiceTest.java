@@ -64,7 +64,7 @@ class WalletServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
     }
 
     // -------------------------------------------------------------------------
@@ -232,7 +232,7 @@ class WalletServiceTest {
 
         assertThat(response.getTransactionId()).isEqualTo("txn-1");
         // Lock was never acquired — short-circuited at the cache layer
-        verify(redissonClient, never()).getLock(any());
+        verify(redissonClient, never()).getLock(anyString());
         verify(transactionTemplate, never()).execute(any());
     }
 
