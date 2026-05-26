@@ -34,10 +34,10 @@ curl -s -X POST http://localhost:8080/wallets \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{"customerId":"CUST-1","name":"Rahul Sharma","email":"rahul@example.com","phone":"+919999999999"}'
 
-# 5. Top up ₹500 (SERVICE or ADMIN)
+# 5. Top up ₹500 (CUSTOMER tops up their own wallet)
 curl -s -X POST http://localhost:8080/wallets/<id>/topup \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $SERVICE_TOKEN" \
+  -H "Authorization: Bearer $CUSTOMER_TOKEN" \
   -d '{"amount":500}'
 
 # 6. Deduct ₹100 (SERVICE or ADMIN — Order Service uses SERVICE token)
@@ -52,10 +52,16 @@ curl -s http://localhost:8080/wallets/<id>/balance \
   -H "Authorization: Bearer $CUSTOMER_TOKEN"
 
 # 8. Run the Order Service stub
-pip install requests
-python order-stub/order_stub.py <wallet-id> --orders 3
-python order-stub/order_stub.py <wallet-id> --orders 5 --concurrent
-python order-stub/order_stub.py <wallet-id> --idempotency-test
+cd order-stub
+pip3 install -r requirements.txt
+
+# Full end-to-end demo (creates wallet, tops up, deducts, idempotency, ledger)
+python3 order_stub.py --full-demo
+
+# Or target a specific wallet
+python3 order_stub.py <wallet-id> --orders 3               # sequential
+python3 order_stub.py <wallet-id> --orders 5 --concurrent  # race-condition proof
+python3 order_stub.py <wallet-id> --idempotency-test       # same order ID twice
 ```
 
 ---
@@ -79,9 +85,9 @@ curl -X POST /auth/token \
 |------|-------------|-----------------|
 | `ADMIN` | Ops / internal tools | Everything — create wallets, topup, deduct, read any wallet |
 | `SERVICE` | Order Service (server-to-server) | Topup + deduct on any wallet |
-| `CUSTOMER` | End user | Read **own wallet only** (balance + transactions) |
+| `CUSTOMER` | End user (via frontend) | Top up **own wallet** + read **own wallet** (balance + transactions) |
 
-A `CUSTOMER` token with `customerId=CUST-1` can only read wallets where `customerId=CUST-1`. Attempting to read another customer's wallet returns **403**.
+A `CUSTOMER` token with `customerId=CUST-1` can only top up and read wallets where `customerId=CUST-1`. Attempting to access another customer's wallet returns **403**.
 
 ---
 
@@ -91,7 +97,7 @@ A `CUSTOMER` token with `customerId=CUST-1` can only read wallets where `custome
 |--------|------|--------------|--------------|---------|
 | POST | `/auth/token` | — | — | Get JWT token |
 | POST | `/wallets` | `ADMIN` | — | Create wallet |
-| POST | `/wallets/:id/topup` | `SERVICE` or `ADMIN` | — | Add funds |
+| POST | `/wallets/:id/topup` | `CUSTOMER` (own), `SERVICE`, or `ADMIN` | — | Add funds |
 | POST | `/wallets/:id/deduct` | `SERVICE` or `ADMIN` | `Idempotency-Key: <order_id>` | Deduct ₹100 |
 | GET | `/wallets/:id/balance` | Any (CUSTOMER = own only) | — | Current balance |
 | GET | `/wallets/:id/transactions` | Any (CUSTOMER = own only) | — | Full ledger |
