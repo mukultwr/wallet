@@ -33,12 +33,17 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * Core business logic for the wallet: create, topup, deduct, balance, and transaction history.
+ * Deduct uses a Redisson distributed lock + Postgres SELECT FOR UPDATE to prevent concurrent over-spend.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class WalletService {
 
-    static final long DEDUCTION_AMOUNT_PAISE = 10_000L; // ₹100
+    /** Fixed deduction per order: ₹100 stored as paise to avoid float precision issues. */
+    static final long DEDUCTION_AMOUNT_PAISE = 10_000L;
 
     private static final String IDEMPOTENCY_PREFIX = "idempotency:";
     private static final String BALANCE_PREFIX     = "balance:";
@@ -57,6 +62,7 @@ public class WalletService {
     // Create wallet
     // -------------------------------------------------------------------------
 
+    /** Fetches wallet profile (MongoDB) and current balance (PostgreSQL) by wallet ID. */
     public WalletResponse getWalletById(String walletId) {
         WalletDocument doc = walletDocumentRepository.findById(walletId)
                 .orElseThrow(() -> new WalletNotFoundException(walletId));
@@ -65,6 +71,10 @@ public class WalletService {
         return WalletResponse.from(doc, balance.getBalance());
     }
 
+    /**
+     * Creates the wallet profile in MongoDB then the balance row in Postgres.
+     * If the Postgres write fails, the MongoDB document is deleted (compensating transaction).
+     */
     public WalletResponse createWallet(CreateWalletRequest request) {
         String walletId = UUID.randomUUID().toString();
 
@@ -101,6 +111,7 @@ public class WalletService {
     // Top up
     // -------------------------------------------------------------------------
 
+    /** Credits the wallet; balance update, transaction record, and outbox event commit atomically. */
     public TransactionResponse topUp(String walletId, TopUpRequest request) {
         WalletDocument wallet = walletDocumentRepository.findById(walletId)
                 .orElseThrow(() -> new WalletNotFoundException(walletId));
@@ -143,20 +154,12 @@ public class WalletService {
 
     // -------------------------------------------------------------------------
     // Deduct — the critical path
-    //
-    // Idempotency strategy (two-layer):
-    //   Layer 1 — Redis cache: O(1) short-circuit for retries within 24 h
-    //   Layer 2 — DB UNIQUE constraint on idempotency_key: prevents duplicates
-    //             even if the Redis entry has been evicted
-    //
-    // Concurrency strategy (two-layer):
-    //   Layer 1 — Redisson distributed lock: ensures only one deduct per wallet
-    //             runs at a time across all service instances
-    //   Layer 2 — PostgreSQL SELECT FOR UPDATE: row-level lock inside the DB
-    //             transaction; guards against any scenario where the app lock
-    //             is bypassed (direct DB access, lock expiry, etc.)
     // -------------------------------------------------------------------------
 
+    /**
+     * Deducts ₹100 from the wallet. Idempotent via Redis cache (24h) + DB UNIQUE constraint.
+     * Concurrency-safe via Redisson distributed lock + Postgres SELECT FOR UPDATE.
+     */
     public TransactionResponse deduct(String walletId, String idempotencyKey, String referenceId) {
         // Fast path: idempotency cache hit
         TransactionResponse cached = getCachedIdempotencyResponse(idempotencyKey);
@@ -236,6 +239,7 @@ public class WalletService {
     // Balance
     // -------------------------------------------------------------------------
 
+    /** Returns the balance, served from a 1-second Redis read cache to absorb burst reads. */
     public BalanceResponse getBalance(String walletId) {
         walletDocumentRepository.findById(walletId)
                 .orElseThrow(() -> new WalletNotFoundException(walletId));
@@ -258,6 +262,7 @@ public class WalletService {
     // Transactions
     // -------------------------------------------------------------------------
 
+    /** Returns all transactions for the wallet ordered newest-first. */
     public List<TransactionResponse> getTransactions(String walletId) {
         walletDocumentRepository.findById(walletId)
                 .orElseThrow(() -> new WalletNotFoundException(walletId));
@@ -272,6 +277,7 @@ public class WalletService {
     // Helpers
     // -------------------------------------------------------------------------
 
+    /** Returns the cached deduct response for the given idempotency key, or null on miss. */
     private TransactionResponse getCachedIdempotencyResponse(String key) {
         try {
             String json = redisTemplate.opsForValue().get(IDEMPOTENCY_PREFIX + key);
@@ -284,6 +290,7 @@ public class WalletService {
         return null;
     }
 
+    /** Caches the deduct response for 24h. Failures are swallowed — cache miss is recoverable. */
     private void cacheIdempotencyResponse(String key, TransactionResponse response) {
         try {
             redisTemplate.opsForValue().set(
@@ -296,6 +303,7 @@ public class WalletService {
         }
     }
 
+    /** Writes an outbox event atomically with the balance update for downstream Kafka publishing. */
     private void appendOutboxEvent(String walletId, String eventType, String payload) {
         outboxEventRepository.save(OutboxEvent.builder()
                 .id(UUID.randomUUID().toString())

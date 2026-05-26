@@ -13,6 +13,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+/**
+ * Distributed token-bucket rate limiter via Redisson. Limits are per-wallet for write/read
+ * endpoints and per-IP for wallet creation. All thresholds are configurable in application.yml.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -20,7 +24,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     private final RedissonClient redissonClient;
 
-    // Limits are configurable — tune without a code change
+    // Limits are externalized — change in application.yml without a code deploy
     @Value("${rate-limit.deduct.requests:20}")
     private long deductRequests;
 

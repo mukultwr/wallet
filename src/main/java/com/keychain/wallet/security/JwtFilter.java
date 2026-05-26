@@ -16,6 +16,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 
+/**
+ * Reads the Authorization: Bearer header, validates the JWT, and populates the SecurityContext.
+ * Requests without a token pass through unauthenticated; SecurityConfig decides what to allow.
+ */
 @Component
 @RequiredArgsConstructor
 public class JwtFilter extends OncePerRequestFilter {

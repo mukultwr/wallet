@@ -19,6 +19,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * REST endpoints for wallet operations. Role rules live in SecurityConfig;
+ * CUSTOMER ownership (own wallet only) is enforced via checkOwnership().
+ */
 @RestController
 @RequestMapping("/wallets")
 @RequiredArgsConstructor
@@ -26,6 +30,7 @@ public class WalletController {
 
     private final WalletService walletService;
 
+    /** Creates a new wallet. ADMIN only — customers cannot self-provision. */
     @PostMapping
     public ResponseEntity<ApiResponse<WalletResponse>> createWallet(
             @Valid @RequestBody CreateWalletRequest request) {
@@ -33,14 +38,18 @@ public class WalletController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 
+    /** Credits a wallet. CUSTOMER can only top up their own wallet (ownership-checked). */
     @PostMapping("/{id}/topup")
     public ResponseEntity<ApiResponse<TransactionResponse>> topUp(
             @PathVariable String id,
-            @Valid @RequestBody TopUpRequest request) {
+            @Valid @RequestBody TopUpRequest request,
+            Authentication auth) {
+        checkOwnership(id, auth);
         TransactionResponse response = walletService.topUp(id, request);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    /** Deducts ₹100. Idempotency-Key header is required; use the order UUID as the key. */
     @PostMapping("/{id}/deduct")
     public ResponseEntity<ApiResponse<TransactionResponse>> deduct(
             @PathVariable String id,
@@ -51,6 +60,7 @@ public class WalletController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    /** Returns the current balance. CUSTOMER can only read their own wallet. */
     @GetMapping("/{id}/balance")
     public ResponseEntity<ApiResponse<BalanceResponse>> getBalance(
             @PathVariable String id,
@@ -60,6 +70,7 @@ public class WalletController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    /** Returns transaction history newest-first. CUSTOMER can only read their own wallet. */
     @GetMapping("/{id}/transactions")
     public ResponseEntity<ApiResponse<List<TransactionResponse>>> getTransactions(
             @PathVariable String id,
@@ -69,8 +80,7 @@ public class WalletController {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
-    // CUSTOMER role: verify the wallet belongs to them via customerId in the JWT subject.
-    // SERVICE and ADMIN roles can access any wallet without ownership check.
+    /** CUSTOMER tokens may only access their own wallet; SERVICE and ADMIN bypass this check. */
     private void checkOwnership(String walletId, Authentication auth) {
         if (auth == null) return;
         boolean isCustomer = auth.getAuthorities()

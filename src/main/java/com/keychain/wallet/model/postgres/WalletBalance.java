@@ -11,6 +11,10 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * Postgres entity for the authoritative wallet balance, stored in paise (Long) to avoid
+ * float precision issues. DB CHECK (balance >= 0) is the last-resort guard.
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -23,8 +27,7 @@ public class WalletBalance {
     @Column(name = "wallet_id", length = 36)
     private String walletId;
 
-    // Stored in paise (Long avoids float precision issues).
-    // DB-level CHECK (balance >= 0) is the last line of defence.
+    /** Balance in paise (₹1 = 100). Never negative — guarded by app logic and DB CHECK. */
     @Column(nullable = false)
     private Long balance;
 

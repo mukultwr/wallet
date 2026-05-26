@@ -10,12 +10,17 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+/**
+ * Stateless JWT security config. CSRF disabled (no cookies); JwtFilter runs before
+ * Spring's default auth filter to populate the SecurityContext on every request.
+ */
 @Configuration
 @RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
 
+    /** Role-based endpoint authorization. Rules are evaluated top-to-bottom; first match wins. */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -28,10 +33,11 @@ public class SecurityConfig {
                 .requestMatchers("/auth/token").permitAll()
                 // Wallet creation — ADMIN only
                 .requestMatchers(HttpMethod.POST, "/wallets").hasRole("ADMIN")
-                // Topup and deduct — SERVICE or ADMIN (Order Service uses SERVICE token)
-                .requestMatchers(HttpMethod.POST, "/wallets/*/topup").hasAnyRole("SERVICE", "ADMIN")
+                // Topup — CUSTOMER (own wallet, checked in controller), SERVICE, or ADMIN
+                .requestMatchers(HttpMethod.POST, "/wallets/*/topup").hasAnyRole("CUSTOMER", "SERVICE", "ADMIN")
+                // Deduct — ORDER SERVICE (uses SERVICE token) or ADMIN only; never called by customer directly
                 .requestMatchers(HttpMethod.POST, "/wallets/*/deduct").hasAnyRole("SERVICE", "ADMIN")
-                // Read endpoints — CUSTOMER (own wallet only, checked in controller), SERVICE, ADMIN
+                // Read endpoints — any authenticated role; ownership enforced in controller for CUSTOMER
                 .requestMatchers(HttpMethod.GET, "/wallets/*/balance").hasAnyRole("CUSTOMER", "SERVICE", "ADMIN")
                 .requestMatchers(HttpMethod.GET, "/wallets/*/transactions").hasAnyRole("CUSTOMER", "SERVICE", "ADMIN")
                 .anyRequest().authenticated()

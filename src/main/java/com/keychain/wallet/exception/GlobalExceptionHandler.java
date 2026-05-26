@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.stream.Collectors;
 
+/**
+ * Maps exceptions to consistent ApiResponse JSON across all endpoints.
+ * 400 validation, 403 access denied, 404 not found, 409 state conflict, 422 insufficient balance, 500 generic.
+ */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {

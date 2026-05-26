@@ -6,7 +6,7 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "https://wallet-service-production-7710.up.railway.app", "type": "string" },
+    { "key": "baseUrl", "value": "http://localhost:8080", "type": "string" },
     { "key": "walletId", "value": "", "type": "string" },
     { "key": "adminToken", "value": "", "type": "string" },
     { "key": "serviceToken", "value": "", "type": "string" },
@@ -114,7 +114,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["auth", "token"]
             },
-            "description": "Issues a CUSTOMER token for CUST-001. Auto-saved to `customerToken`. CUSTOMER can only read their own wallet."
+            "description": "Issues a CUSTOMER token for CUST-001. Auto-saved to `customerToken`. CUSTOMER can top up their own wallet and read their own balance/transactions."
           },
           "response": []
         }
@@ -198,12 +198,12 @@
       "name": "Top Up",
       "item": [
         {
-          "name": "Top Up ₹500 (SERVICE)",
+          "name": "Top Up ₹500 (CUSTOMER — own wallet)",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{serviceToken}}" }
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
             ],
             "body": {
               "mode": "raw",
@@ -215,17 +215,39 @@
               "host": ["{{baseUrl}}"],
               "path": ["wallets", "{{walletId}}", "topup"]
             },
-            "description": "Add ₹500 to the wallet. Requires SERVICE or ADMIN token."
+            "description": "Customer tops up their own wallet directly (spec: 'Customer (via frontend)'). CUSTOMER token ownership is checked — a customer cannot top up another customer's wallet."
           },
           "response": []
         },
         {
-          "name": "Top Up ₹100 (SERVICE)",
+          "name": "Top Up ₹500 (ADMIN)",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{serviceToken}}" }
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 500\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/wallets/{{walletId}}/topup",
+              "host": ["{{baseUrl}}"],
+              "path": ["wallets", "{{walletId}}", "topup"]
+            },
+            "description": "Admin or back-office topping up a wallet. ADMIN bypasses ownership check."
+          },
+          "response": []
+        },
+        {
+          "name": "Top Up ₹100 (ADMIN — boundary test)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
             ],
             "body": {
               "mode": "raw",
@@ -237,7 +259,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["wallets", "{{walletId}}", "topup"]
             },
-            "description": "Top up exactly ₹100 — enough for exactly one deduction."
+            "description": "Top up exactly ₹100 — enough for exactly one deduction. Use to test the boundary condition."
           },
           "response": []
         }

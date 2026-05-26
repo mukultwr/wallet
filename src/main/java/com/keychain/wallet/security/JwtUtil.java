@@ -10,6 +10,10 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
+/**
+ * Generates and verifies JWTs. Claims: sub=customerId, role=CUSTOMER|SERVICE|ADMIN.
+ * Secret and expiry are configured in application.yml.
+ */
 @Component
 public class JwtUtil {
 

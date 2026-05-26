@@ -9,10 +9,10 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
+/** JPA repository for wallet_balances. The locking variant is the second concurrency guard after Redisson. */
 public interface WalletBalanceRepository extends JpaRepository<WalletBalance, String> {
 
-    // Acquires a row-level exclusive lock (SELECT ... FOR UPDATE).
-    // Used exclusively inside the deduct transaction to prevent concurrent over-spend.
+    /** Issues SELECT FOR UPDATE — must be called inside an active transaction. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT w FROM WalletBalance w WHERE w.walletId = :walletId")
     Optional<WalletBalance> findByWalletIdWithLock(@Param("walletId") String walletId);

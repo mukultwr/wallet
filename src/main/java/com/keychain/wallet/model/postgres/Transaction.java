@@ -8,6 +8,10 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * Append-only ledger row. balance_after is a snapshot per row (no need to sum history).
+ * idempotency_key UNIQUE is the DB-level guard against duplicate deductions.
+ */
 @Data
 @Builder
 @NoArgsConstructor
